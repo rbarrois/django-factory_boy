@@ -1,8 +1,9 @@
 import datetime
 
+from django import VERSION as DJANGO_VERSION
 from django.conf import settings
-
 from django.contrib.auth import models
+from django.db.models import get_model
 
 from django_factory_boy import contenttypes
 
@@ -14,30 +15,36 @@ __all__ = (
     'GroupF'
 )
 
-class PermissionF(factory.Factory):
+class PermissionF(factory.DjangoModelFactory):
     FACTORY_FOR = models.Permission
 
     name = factory.Sequence(lambda n: "permission%s" % n)
-    content_type = contenttypes.ContentTypeF()
+    content_type = factory.SubFactory(contenttypes.ContentTypeF)
     codename = factory.Sequence(lambda n:"factory_%s" % n)
 
-class GroupF(factory.Factory):
+class GroupF(factory.DjangoModelFactory):
     FACTORY_FOR = models.Group
 
     @classmethod
     def _setup_next_sequence(cls):
-        return cls._associated_class.objects.values_list(
-            'id', flat=True).order_by('-id')[0] + 1
+        try:
+            return cls._associated_class.objects.values_list(
+                'id', flat=True).order_by('-id')[0] + 1
+        except IndexError:
+            return 0
 
     name = factory.Sequence(lambda n: "group%s" % n)
 
-class UserF(factory.Factory):
+class UserF(factory.DjangoModelFactory):
     FACTORY_FOR = models.User
 
     @classmethod
     def _setup_next_sequence(cls):
-        return cls._associated_class.objects.values_list(
-            'id', flat=True).order_by('-id')[0] + 1
+        try:
+            return cls._associated_class.objects.values_list(
+                'id', flat=True).order_by('-id')[0] + 1
+        except IndexError:
+            return 0
 
     username = factory.Sequence(lambda n: "username%s" % n)
     first_name = factory.Sequence(lambda n: "first_name%s" % n)
@@ -50,8 +57,47 @@ class UserF(factory.Factory):
     last_login = datetime.datetime(2000, 1, 1)
     date_joined = datetime.datetime(1999, 1, 1)
 
-class MessageF(factory.Factory):
-    FACTORY_FOR = models.Message
+    @classmethod
+    def _create(cls, target_class, *args, **kwargs):
+        # figure out the profile's related name and strip profile's kwargs
+        profile_model, profile_kwargs = None, {}
+        try:
+            app_label, model_name = settings.AUTH_PROFILE_MODULE.split('.')
+        except (ValueError, AttributeError):
+            pass
+        else:
+            try:
+                profile_model = get_model(app_label, model_name)
+            except (ImportError, ImproperlyConfigured):
+                pass
+        if profile_model:
+            user_field = profile_model._meta.get_field_by_name('user')[0]
+            related_name = user_field.related_query_name()
+            profile_prefix = '%s__' % related_name
+            for k in kwargs.keys():
+                if k.startswith(profile_prefix):
+                    profile_key = k.replace(profile_prefix, '', 1)
+                    profile_kwargs[profile_key] = kwargs.pop(k)
 
-    user = UserF()
-    message = factory.Sequence(lambda n: "message %s" % n)
+        # create the user
+        user = target_class._default_manager.create(**kwargs)
+
+        if profile_model and profile_kwargs:
+            # update or create the profile model
+            profile, created = profile_model._default_manager.get_or_create(
+                user=user, defaults=profile_kwargs)
+            if not created:
+                for k,v in profile_kwargs.items():
+                    setattr(profile, k, v)
+                profile.save()
+            setattr(user, related_name, profile)
+            setattr(user, '_profile_cache', profile)
+
+        return user
+
+if DJANGO_VERSION[:2] <= (1, 3):
+    class MessageF(factory.DjangoModelFactory):
+        FACTORY_FOR = models.Message
+
+        user = factory.SubFactory(UserF)
+        message = factory.Sequence(lambda n: "message %s" % n)

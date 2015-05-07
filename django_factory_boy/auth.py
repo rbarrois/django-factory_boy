@@ -1,8 +1,8 @@
 import datetime
 
-from django import VERSION as DJANGO_VERSION
 from django.conf import settings
 from django.contrib.auth import models
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import get_model
 
 import factory

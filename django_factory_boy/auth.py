@@ -1,8 +1,8 @@
 import datetime
 
-from django import VERSION as DJANGO_VERSION
 from django.conf import settings
 from django.contrib.auth import models
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import get_model
 
 import factory
@@ -17,7 +17,8 @@ __all__ = (
 )
 
 class PermissionFactory(factory.django.DjangoModelFactory):
-    FACTORY_FOR = models.Permission
+    class Meta:
+        model = models.Permission
 
     name = factory.Sequence(lambda n: "permission%s" % n)
     content_type = factory.SubFactory(contenttypes.ContentTypeFactory)
@@ -25,13 +26,15 @@ class PermissionFactory(factory.django.DjangoModelFactory):
 
 
 class GroupFactory(factory.django.DjangoModelFactory):
-    FACTORY_FOR = models.Group
+    class Meta:
+        model = models.Group
 
     name = factory.Sequence(lambda n: "group%s" % n)
 
 
 class UserFactory(factory.django.DjangoModelFactory):
-    FACTORY_FOR = models.User
+    class Meta:
+        model = models.User
 
     username = factory.Sequence(lambda n: "username%s" % n)
     first_name = factory.Sequence(lambda n: "first_name%s" % n)

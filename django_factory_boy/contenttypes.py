@@ -27,7 +27,8 @@ def get_model(app_label):
 
 
 class ContentTypeFactory(factory.django.DjangoModelFactory):
-    FACTORY_FOR = models.ContentType
+    class Meta:
+        model = models.ContentType
 
     name = factory.Sequence(lambda n: "content type %s" % n)
 
